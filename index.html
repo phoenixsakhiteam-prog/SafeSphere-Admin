@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  ============================================================
+   SafeSphere AI Guardian — Admin Web Dashboard
+   Stack  : HTML · CSS · Vanilla JS · Leaflet.js · Supabase JS
+   GitHub : Push the whole SafeSphere-Admin/ folder
+   Setup  : Edit SUPABASE_URL and SUPABASE_ANON_KEY below
+  ============================================================
+-->
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SafeSphere — Admin Dashboard</title>
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+/* ── Reset & Variables ───────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:      #0d0d1a;
+  --card:    #13132b;
+  --panel:   #1a1a35;
+  --purple:  #e040fb;
+  --cyan:    #00e5ff;
+  --red:     #ff1744;
+  --green:   #00e676;
+  --yellow:  #ffea00;
+  --blue:    #448aff;
+  --text:    #e8eaf6;
+  --muted:   #7986cb;
+  --border:  #2d2d5e;
+  --radius:  12px;
+  --shadow:  0 4px 24px rgba(0,0,0,.5);
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* ── Navbar ─────────────────────────────────────────────── */
+.navbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1000;box-shadow:var(--shadow)}
+.brand{font-size:20px;font-weight:800;color:var(--purple);display:flex;align-items:center;gap:8px}
+.brand span{color:var(--cyan)}
+.nav-right{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--muted)}
+#liveTime{color:var(--text);font-weight:700}
+.dot{width:8px;height:8px;background:var(--green);border-radius:50%;display:inline-block;animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.layout{display:grid;grid-template-columns:340px 1fr;gap:20px;padding:20px;max-width:1600px;margin:0 auto}
+
+/* ── Stats ──────────────────────────────────────────────── */
+.stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}
+.stat-val{font-size:28px;font-weight:800}
+.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+.c-purple .stat-val{color:var(--purple)}
+.c-red    .stat-val{color:var(--red)}
+.c-green  .stat-val{color:var(--green)}
+.c-cyan   .stat-val{color:var(--cyan)}
+.c-yellow .stat-val{color:var(--yellow)}
+.c-blue   .stat-val{color:var(--blue)}
+
+/* ── Card ───────────────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.card-hdr{padding:14px 16px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--purple)}
+.btn-sm{background:none;border:1px solid var(--border);border-radius:6px;color:var(--cyan);padding:4px 10px;font-size:12px;cursor:pointer;transition:background .2s}
+.btn-sm:hover{background:var(--panel)}
+
+/* ── Alert List ─────────────────────────────────────────── */
+.left-panel{display:flex;flex-direction:column;gap:16px}
+.alert-scroll{max-height:440px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.a-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;border-left:3px solid transparent}
+.a-item:hover{background:var(--panel)}
+.a-item.sel{background:rgba(224,64,251,.1);border-left-color:var(--purple)}
+.a-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.a-name{font-weight:700;font-size:14px}
+.badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px}
+.b-btn{background:rgba(255,23,68,.18);color:var(--red)}
+.b-fall{background:rgba(255,234,0,.15);color:var(--yellow)}
+.b-act{background:rgba(0,230,118,.15);color:var(--green)}
+.b-res{background:rgba(121,134,203,.15);color:var(--muted)}
+.a-time{font-size:11px;color:var(--muted);margin-top:2px}
+.a-loc{font-size:11px;color:var(--cyan)}
+.empty{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+
+/* ── Detail ─────────────────────────────────────────────── */
+.detail-body{padding:16px}
+.d-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.d-row:last-child{border-bottom:none}
+.d-key{color:var(--muted)}
+.d-val{color:var(--text);font-weight:600;text-align:right;max-width:200px}
+.resolve-btn{width:100%;margin-top:12px;padding:10px;background:var(--green);border:none;border-radius:8px;color:#0d0d1a;font-weight:800;font-size:14px;cursor:pointer;transition:opacity .2s}
+.resolve-btn:hover{opacity:.85}
+.resolve-btn:disabled{background:var(--border);color:var(--muted);cursor:default}
+.osm-link{display:block;text-align:center;margin-top:8px;color:var(--cyan);font-size:13px;text-decoration:none}
+.osm-link:hover{text-decoration:underline}
+
+/* ── Right Panel ────────────────────────────────────────── */
+.right-panel{display:flex;flex-direction:column;gap:16px}
+#map{height:420px;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+
+/* ── CCTV ───────────────────────────────────────────────── */
+.cctv-wrap{position:relative;background:#000;aspect-ratio:16/9;overflow:hidden}
+#cctvVideo{width:100%;height:100%;object-fit:cover;display:block}
+.cctv-hud{position:absolute;top:0;left:0;right:0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);pointer-events:none}
+.rec-label{font-size:12px;font-weight:800;color:var(--red);letter-spacing:.1em;display:flex;align-items:center;gap:6px}
+.cctv-ts{font-size:12px;color:rgba(255,255,255,.7)}
+.cctv-off{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px;background:#000;aspect-ratio:16/9}
+.cctv-btns{display:flex;gap:8px;padding:10px;background:var(--card);border-top:1px solid var(--border)}
+.cctv-btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:12px;cursor:pointer;transition:background .2s}
+.cctv-btn:hover{background:var(--border)}
+#btnStop{display:none}
+
+/* ── Toast ──────────────────────────────────────────────── */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast.show{opacity:1}
+
+/* ── Connection Banner ──────────────────────────────────── */
+#connBanner{display:none;background:rgba(255,23,68,.15);border:1px solid var(--red);color:var(--red);padding:10px 20px;text-align:center;font-size:13px;font-weight:600}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media(max-width:900px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:500px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════════════════╗
+     ║  ⚙  CONFIGURATION — EDIT THESE TWO VALUES BELOW    ║
+     ╚══════════════════════════════════════════════════════╝
+     Get them from: Supabase → Your Project → Settings → API -->
+<script>
+  const SUPABASE_URL      = "https://YOUR_PROJECT_ID.supabase.co";   // ← CHANGE THIS
+  const SUPABASE_ANON_KEY = "YOUR_ANON_PUBLIC_KEY_HERE";              // ← CHANGE THIS
+</script>
+
+<div id="connBanner">⚠ Cannot connect to Supabase. Check your URL and ANON KEY in index.html</div>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="brand">🛡 SafeSphere <span>Guardian</span></div>
+  <div class="nav-right">
+    <span class="dot"></span> LIVE
+    <span id="liveTime">--:--:--</span>
+    <span>Admin Dashboard v2.0</span>
+  </div>
+</nav>
+
+<div class="layout">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat c-purple"><div class="stat-val" id="sTotal">—</div><div class="stat-lbl">Total Alerts</div></div>
+    <div class="stat c-red">   <div class="stat-val" id="sActive">—</div><div class="stat-lbl">Active</div></div>
+    <div class="stat c-green"> <div class="stat-val" id="sResolved">—</div><div class="stat-lbl">Resolved</div></div>
+    <div class="stat c-cyan">  <div class="stat-val" id="sUsers">—</div><div class="stat-lbl">Users</div></div>
+    <div class="stat c-yellow"><div class="stat-val" id="sButton">—</div><div class="stat-lbl">SOS Button</div></div>
+    <div class="stat c-blue">  <div class="stat-val" id="sFall">—</div><div class="stat-lbl">Fall Detect</div></div>
+  </div>
+
+  <!-- Left Panel -->
+  <div class="left-panel">
+
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">🚨 Active Alerts</span>
+        <button class="btn-sm" onclick="loadAll()">⟳ Refresh</button>
+      </div>
+      <div class="alert-scroll" id="alertList">
+        <div class="empty">Connecting to Supabase…</div>
+      </div>
+    </div>
+
+    <div class="card" id="detailCard" style="display:none">
+      <div class="card-hdr">
+        <span class="card-title">📋 Alert Detail</span>
+        <button class="btn-sm" onclick="closeDetail()">✕ Close</button>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+
+  </div>
+
+  <!-- Right Panel -->
+  <div class="right-panel">
+
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">🗺 Live Location Map</span>
+        <span style="font-size:11px;color:var(--muted)">OpenStreetMap · No API Key</span>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📷 CCTV Feed (Webcam)</span>
+      </div>
+      <div class="cctv-wrap" id="cctvBox">
+        <div class="cctv-off" id="cctvOff">📷 Camera offline — click Start Camera</div>
+        <video id="cctvVideo" autoplay muted playsinline style="display:none"></video>
+        <div class="cctv-hud" id="cctvHud" style="display:none">
+          <div class="rec-label"><span class="dot"></span> REC</div>
+          <div class="cctv-ts" id="cctvTs">--:--:--</div>
+        </div>
+      </div>
+      <div class="cctv-btns">
+        <button class="cctv-btn" id="btnStart"    onclick="startCam()">▶ Start Camera</button>
+        <button class="cctv-btn" id="btnStop"     onclick="stopCam()">⏹ Stop</button>
+        <button class="cctv-btn"                  onclick="snap()">📸 Snapshot</button>
+        <button class="cctv-btn"                  onclick="goFullscreen()">⛶ Fullscreen</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+<canvas id="snapCanvas" style="display:none"></canvas>
+
+<!-- Supabase JS SDK (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// ============================================================
+//  SUPABASE CLIENT
+// ============================================================
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+//  STATE
+// ============================================================
+let allAlerts    = [];
+let selectedId   = null;
+let mapObj       = null;
+let markers      = [];
+let camStream    = null;
+
+// ============================================================
+//  CLOCK
+// ============================================================
+setInterval(() => {
+  const t = new Date().toLocaleTimeString();
+  document.getElementById("liveTime").textContent = t;
+  const ts = document.getElementById("cctvTs");
+  if (ts) ts.textContent = t;
+}, 1000);
+
+// ============================================================
+//  MAP (Leaflet + OpenStreetMap — zero API key needed)
+// ============================================================
+function initMap() {
+  mapObj = L.map("map").setView([22.5726, 88.3639], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap contributors",
+    maxZoom: 19
+  }).addTo(mapObj);
+}
+
+function refreshMarkers() {
+  markers.forEach(m => mapObj.removeLayer(m));
+  markers = [];
+  const active = allAlerts.filter(a => a.status === "active" && a.latitude && a.longitude);
+  active.forEach(a => {
+    const isFall = a.alert_type === "SOS_FALL";
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="
+        background:${isFall ? "#ffea00" : "#ff1744"};
+        border:2px solid #fff;border-radius:50%;
+        width:22px;height:22px;display:flex;align-items:center;
+        justify-content:center;font-size:11px;font-weight:800;color:#000;
+        box-shadow:0 0 10px ${isFall ? "rgba(255,234,0,.7)" : "rgba(255,23,68,.7)"};
+      ">!</div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11]
+    });
+    const m = L.marker([a.latitude, a.longitude], { icon })
+      .addTo(mapObj)
+      .bindPopup(`
+        <b>${a.name || a.user_id}</b><br/>
+        📍 ${a.latitude.toFixed(5)}, ${a.longitude.toFixed(5)}<br/>
+        🚨 ${a.alert_type}<br/>
+        🕐 ${new Date(a.timestamp).toLocaleString()}
+      `);
+    m.on("click", () => selectAlert(a.id));
+    markers.push(m);
+  });
+  if (markers.length) {
+    mapObj.fitBounds(L.featureGroup(markers).getBounds().pad(0.3));
+  }
+}
+
+function flyTo(lat, lng) {
+  mapObj.flyTo([lat, lng], 16, { duration: 1 });
+}
+
+// ============================================================
+//  DATA — SUPABASE QUERIES
+// ============================================================
+async function loadAll() {
+  try {
+    const { data, error } = await db
+      .from("alerts")
+      .select(`*, users(name, phone, emergency_contact, emergency_phone, address)`)
+      .order("timestamp", { ascending: false });
+
+    if (error) throw error;
+
+    // Flatten the nested users object
+    allAlerts = (data || []).map(row => {
+      const flat = { ...row };
+      if (flat.users) { Object.assign(flat, flat.users); delete flat.users; }
+      return flat;
+    });
+
+    renderList();
+    refreshMarkers();
+    loadStats();
+    document.getElementById("connBanner").style.display = "none";
+  } catch (err) {
+    console.error(err);
+    document.getElementById("alertList").innerHTML =
+      `<div class="empty">⚠ Supabase error: ${err.message}<br/><small>Check URL & ANON_KEY in index.html</small></div>`;
+    document.getElementById("connBanner").style.display = "block";
+  }
+}
+
+async function loadStats() {
+  const { data: alerts } = await db.from("alerts").select("status, alert_type");
+  const { count }        = await db.from("users").select("*", { count: "exact", head: true });
+  const rows = alerts || [];
+  document.getElementById("sTotal").textContent    = rows.length;
+  document.getElementById("sActive").textContent   = rows.filter(r => r.status     === "active").length;
+  document.getElementById("sResolved").textContent = rows.filter(r => r.status     === "resolved").length;
+  document.getElementById("sUsers").textContent    = count ?? "—";
+  document.getElementById("sButton").textContent   = rows.filter(r => r.alert_type === "SOS_BUTTON").length;
+  document.getElementById("sFall").textContent     = rows.filter(r => r.alert_type === "SOS_FALL").length;
+}
+
+// ============================================================
+//  RENDER ALERT LIST
+// ============================================================
+function renderList() {
+  const el     = document.getElementById("alertList");
+  const active = allAlerts.filter(a => a.status === "active");
+  if (!active.length) {
+    el.innerHTML = `<div class="empty">✅ No active alerts right now</div>`;
+    return;
+  }
+  el.innerHTML = active.map(a => `
+    <div class="a-item ${a.id === selectedId ? "sel" : ""}" onclick="selectAlert('${a.id}')">
+      <div class="a-top">
+        <span class="a-name">👤 ${a.name || a.user_id}</span>
+        <span class="badge ${a.alert_type === "SOS_FALL" ? "b-fall" : "b-btn"}">
+          ${a.alert_type === "SOS_FALL" ? "🤸 FALL" : "🆘 BUTTON"}
+        </span>
+      </div>
+      <div class="a-time">🕐 ${new Date(a.timestamp).toLocaleString()}</div>
+      <div class="a-loc">📍 ${a.latitude?.toFixed(4) ?? "?"}, ${a.longitude?.toFixed(4) ?? "?"}</div>
+    </div>
+  `).join("");
+}
+
+// ============================================================
+//  ALERT DETAIL
+// ============================================================
+function selectAlert(id) {
+  selectedId = id;
+  renderList();  // refresh active highlight
+  const a = allAlerts.find(x => x.id === id);
+  if (!a) return;
+
+  const resolved = a.status === "resolved";
+  document.getElementById("detailCard").style.display = "block";
+  document.getElementById("detailBody").innerHTML = `
+    <div class="d-row"><span class="d-key">Name</span>              <span class="d-val">${a.name || "—"}</span></div>
+    <div class="d-row"><span class="d-key">Phone</span>             <span class="d-val">${a.phone || "—"}</span></div>
+    <div class="d-row"><span class="d-key">Emergency Contact</span> <span class="d-val">${a.emergency_contact || "—"}</span></div>
+    <div class="d-row"><span class="d-key">Emergency Phone</span>   <span class="d-val">${a.emergency_phone || "—"}</span></div>
+    <div class="d-row"><span class="d-key">Address</span>           <span class="d-val">${a.address || "—"}</span></div>
+    <div class="d-row"><span class="d-key">Alert Type</span>        <span class="d-val">${a.alert_type}</span></div>
+    <div class="d-row"><span class="d-key">Coordinates</span>       <span class="d-val">${a.latitude?.toFixed(5)}, ${a.longitude?.toFixed(5)}</span></div>
+    <div class="d-row"><span class="d-key">Time</span>              <span class="d-val">${new Date(a.timestamp).toLocaleString()}</span></div>
+    <div class="d-row"><span class="d-key">Status</span>
+      <span class="d-val">
+        <span class="badge ${resolved ? "b-res" : "b-act"}">
+          ${resolved ? "✅ Resolved" : "🔴 Active"}
+        </span>
+      </span>
+    </div>
+    <button class="resolve-btn" id="resBtn" onclick="doResolve('${a.id}')" ${resolved ? "disabled" : ""}>
+      ${resolved ? "✅ Already Resolved" : "✔ Mark as Resolved"}
+    </button>
+    <a class="osm-link"
+       href="https://www.openstreetmap.org/?mlat=${a.latitude}&mlon=${a.longitude}#map=16/${a.latitude}/${a.longitude}"
+       target="_blank">🗺 Open in OpenStreetMap ↗</a>
+  `;
+
+  if (a.latitude && a.longitude) {
+    flyTo(a.latitude, a.longitude);
+    const m = markers.find(mk =>
+      Math.abs(mk.getLatLng().lat - a.latitude) < 0.00001 &&
+      Math.abs(mk.getLatLng().lng - a.longitude) < 0.00001
+    );
+    if (m) m.openPopup();
+  }
+}
+
+function closeDetail() {
+  selectedId = null;
+  document.getElementById("detailCard").style.display = "none";
+  renderList();
+}
+
+async function doResolve(id) {
+  const btn = document.getElementById("resBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
+  const { error } = await db.from("alerts")
+    .update({ status: "resolved", notes: "Resolved by admin dashboard" })
+    .eq("id", id);
+  if (error) {
+    toast("❌ " + error.message, "red");
+    if (btn) { btn.disabled = false; btn.textContent = "✔ Mark as Resolved"; }
+  } else {
+    toast("✅ Alert resolved");
+    await loadAll();
+    closeDetail();
+  }
+}
+
+// ============================================================
+//  REAL-TIME SUBSCRIPTION (Supabase Realtime)
+// ============================================================
+function subscribeRealtime() {
+  db.channel("alerts-channel")
+    .on("postgres_changes", { event: "*", schema: "public", table: "alerts" },
+      (payload) => {
+        if (payload.eventType === "INSERT") {
+          toast("🚨 New SOS Alert received!", "red");
+        }
+        loadAll();
+      }
+    )
+    .subscribe();
+}
+
+// ============================================================
+//  WEBCAM / CCTV
+// ============================================================
+async function startCam() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const v = document.getElementById("cctvVideo");
+    v.srcObject = camStream;
+    v.style.display = "block";
+    document.getElementById("cctvOff").style.display = "none";
+    document.getElementById("cctvHud").style.display = "flex";
+    document.getElementById("btnStart").style.display = "none";
+    document.getElementById("btnStop").style.display  = "block";
+    toast("📷 Camera started");
+  } catch (e) {
+    toast("❌ Camera: " + e.message, "red");
+  }
+}
+
+function stopCam() {
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+    const v = document.getElementById("cctvVideo");
+    v.srcObject = null;
+    v.style.display = "none";
+    document.getElementById("cctvOff").style.display = "flex";
+    document.getElementById("cctvHud").style.display = "none";
+    document.getElementById("btnStart").style.display = "block";
+    document.getElementById("btnStop").style.display  = "none";
+    toast("⏹ Camera stopped");
+  }
+}
+
+function snap() {
+  const v = document.getElementById("cctvVideo");
+  if (!camStream || v.readyState < 2) { toast("⚠ Camera not running", "yellow"); return; }
+  const c = document.getElementById("snapCanvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  const a = document.createElement("a");
+  a.download = `safesphere_snap_${Date.now()}.png`;
+  a.href = c.toDataURL("image/png");
+  a.click();
+  toast("📸 Snapshot saved");
+}
+
+function goFullscreen() {
+  const box = document.getElementById("cctvBox");
+  if (!document.fullscreenElement) box.requestFullscreen().catch(e => toast("⚠ " + e.message, "yellow"));
+  else document.exitFullscreen();
+}
+
+// ============================================================
+//  TOAST
+// ============================================================
+let tTimer;
+function toast(msg, color = "green") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.borderColor = color === "red" ? "var(--red)" : color === "yellow" ? "var(--yellow)" : "var(--green)";
+  el.classList.add("show");
+  clearTimeout(tTimer);
+  tTimer = setTimeout(() => el.classList.remove("show"), 3500);
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener("DOMContentLoaded", () => {
+  initMap();
+  loadAll();
+  subscribeRealtime();          // live push updates, no polling needed!
+  setInterval(loadStats, 10000); // refresh stats every 10s as backup
+});
+</script>
+</body>
+</html>
