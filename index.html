@@ -2,10 +2,10 @@
 <html lang="en">
 <!--
   ============================================================
-   SafeSphere AI Guardian — Admin Web Dashboard
+   Phoenix-SAKHI — Admin Web Dashboard
    Stack  : HTML · CSS · Vanilla JS · Leaflet.js · Supabase JS
-   GitHub : Push the whole SafeSphere-Admin/ folder
-   Setup  : Edit SUPABASE_URL and SUPABASE_ANON_KEY below
+   Reads  : Supabase JS SDK (realtime)
+   Writes : Render Backend (resolve / delete)
   ============================================================
 -->
 <head>
@@ -17,13 +17,13 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-/* ── Reset & Variables ───────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:      #0d0d1a;
   --card:    #13132b;
   --panel:   #1a1a35;
-  --purple:  #e040fb;
+  --orange:  #ff6b00;
+  --orange2: #e65100;
   --cyan:    #00e5ff;
   --red:     #ff1744;
   --green:   #00e676;
@@ -39,12 +39,20 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 
 /* ── Navbar ─────────────────────────────────────────────── */
 .navbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1000;box-shadow:var(--shadow)}
-.brand{font-size:20px;font-weight:800;color:var(--purple);display:flex;align-items:center;gap:8px}
+.brand{font-size:20px;font-weight:800;color:var(--orange);display:flex;align-items:center;gap:8px}
 .brand span{color:var(--cyan)}
 .nav-right{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--muted)}
 #liveTime{color:var(--text);font-weight:700}
 .dot{width:8px;height:8px;background:var(--green);border-radius:50%;display:inline-block;animation:blink 1.4s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ── Backend status pill ────────────────────────────────── */
+.backend-pill{display:flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+.backend-pill .dot-b{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.backend-pill.ok  .dot-b{background:var(--green)}
+.backend-pill.err .dot-b{background:var(--red)}
+.backend-pill.ok {border-color:rgba(0,230,118,.3);color:var(--green)}
+.backend-pill.err{border-color:rgba(255,23,68,.3); color:var(--red)}
 
 /* ── Layout ─────────────────────────────────────────────── */
 .layout{display:grid;grid-template-columns:340px 1fr;gap:20px;padding:20px;max-width:1600px;margin:0 auto}
@@ -54,7 +62,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}
 .stat-val{font-size:28px;font-weight:800}
 .stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
-.c-purple .stat-val{color:var(--purple)}
+.c-orange .stat-val{color:var(--orange)}
 .c-red    .stat-val{color:var(--red)}
 .c-green  .stat-val{color:var(--green)}
 .c-cyan   .stat-val{color:var(--cyan)}
@@ -64,25 +72,27 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 /* ── Card ───────────────────────────────────────────────── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
 .card-hdr{padding:14px 16px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--purple)}
+.card-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--orange)}
 .btn-sm{background:none;border:1px solid var(--border);border-radius:6px;color:var(--cyan);padding:4px 10px;font-size:12px;cursor:pointer;transition:background .2s}
 .btn-sm:hover{background:var(--panel)}
+.btn-sm.danger{color:var(--red);border-color:rgba(255,23,68,.3)}
+.btn-sm.danger:hover{background:rgba(255,23,68,.1)}
 
 /* ── Alert List ─────────────────────────────────────────── */
 .left-panel{display:flex;flex-direction:column;gap:16px}
 .alert-scroll{max-height:440px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 .a-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;border-left:3px solid transparent}
 .a-item:hover{background:var(--panel)}
-.a-item.sel{background:rgba(224,64,251,.1);border-left-color:var(--purple)}
+.a-item.sel{background:rgba(255,107,0,.08);border-left-color:var(--orange)}
 .a-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .a-name{font-weight:700;font-size:14px}
 .badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px}
-.b-btn{background:rgba(255,23,68,.18);color:var(--red)}
-.b-fall{background:rgba(255,234,0,.15);color:var(--yellow)}
-.b-act{background:rgba(0,230,118,.15);color:var(--green)}
-.b-res{background:rgba(121,134,203,.15);color:var(--muted)}
+.b-btn {background:rgba(255,23,68,.18); color:var(--red)}
+.b-fall{background:rgba(255,234,0,.15); color:var(--yellow)}
+.b-act {background:rgba(0,230,118,.15); color:var(--green)}
+.b-res {background:rgba(121,134,203,.15);color:var(--muted)}
 .a-time{font-size:11px;color:var(--muted);margin-top:2px}
-.a-loc{font-size:11px;color:var(--cyan)}
+.a-loc {font-size:11px;color:var(--cyan)}
 .empty{text-align:center;padding:30px;color:var(--muted);font-size:13px}
 
 /* ── Detail ─────────────────────────────────────────────── */
@@ -91,9 +101,12 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .d-row:last-child{border-bottom:none}
 .d-key{color:var(--muted)}
 .d-val{color:var(--text);font-weight:600;text-align:right;max-width:200px}
-.resolve-btn{width:100%;margin-top:12px;padding:10px;background:var(--green);border:none;border-radius:8px;color:#0d0d1a;font-weight:800;font-size:14px;cursor:pointer;transition:opacity .2s}
+.action-row{display:flex;gap:8px;margin-top:12px}
+.resolve-btn{flex:1;padding:10px;background:var(--green);border:none;border-radius:8px;color:#0d0d1a;font-weight:800;font-size:13px;cursor:pointer;transition:opacity .2s}
 .resolve-btn:hover{opacity:.85}
 .resolve-btn:disabled{background:var(--border);color:var(--muted);cursor:default}
+.delete-btn{padding:10px 14px;background:rgba(255,23,68,.15);border:1px solid rgba(255,23,68,.4);border-radius:8px;color:var(--red);font-weight:800;font-size:13px;cursor:pointer;transition:background .2s}
+.delete-btn:hover{background:rgba(255,23,68,.25)}
 .osm-link{display:block;text-align:center;margin-top:8px;color:var(--cyan);font-size:13px;text-decoration:none}
 .osm-link:hover{text-decoration:underline}
 
@@ -107,7 +120,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .cctv-hud{position:absolute;top:0;left:0;right:0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);pointer-events:none}
 .rec-label{font-size:12px;font-weight:800;color:var(--red);letter-spacing:.1em;display:flex;align-items:center;gap:6px}
 .cctv-ts{font-size:12px;color:rgba(255,255,255,.7)}
-.cctv-off{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:14px;background:#000;aspect-ratio:16/9}
+.cctv-off{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:14px;background:#000}
 .cctv-btns{display:flex;gap:8px;padding:10px;background:var(--card);border-top:1px solid var(--border)}
 .cctv-btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:12px;cursor:pointer;transition:background .2s}
 .cctv-btn:hover{background:var(--border)}
@@ -117,8 +130,9 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 #toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
 #toast.show{opacity:1}
 
-/* ── Connection Banner ──────────────────────────────────── */
+/* ── Banners ────────────────────────────────────────────── */
 #connBanner{display:none;background:rgba(255,23,68,.15);border:1px solid var(--red);color:var(--red);padding:10px 20px;text-align:center;font-size:13px;font-weight:600}
+#renderBanner{display:none;background:rgba(255,107,0,.12);border:1px solid rgba(255,107,0,.4);color:var(--orange);padding:8px 20px;text-align:center;font-size:12px}
 
 /* ── Responsive ─────────────────────────────────────────── */
 @media(max-width:900px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
@@ -127,21 +141,27 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 </head>
 <body>
 
-<!-- ╔══════════════════════════════════════════════════════╗
-     ║  ⚙  CONFIGURATION — EDIT THESE TWO VALUES BELOW    ║
-     ╚══════════════════════════════════════════════════════╝
-     Get them from: Supabase → Your Project → Settings → API -->
 <script>
-  const SUPABASE_URL      ="https://vadpyotingfkwlmocnsr.supabase.co" ;   // ← CHANGE THIS
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZhZHB5b3Rpbmdma3dsbW9jbnNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNjUwNDAsImV4cCI6MjA5MTg0MTA0MH0.gDkpEJ3Hrf_k8696LbR8L_lGB0xyaHOjOVJ_GxcbrLc";              // ← CHANGE THIS
+  /* ══════════════════════════════════════════════════════════
+     ⚙  CONFIGURATION — already filled in
+     ══════════════════════════════════════════════════════════ */
+  const SUPABASE_URL      = "https://vadpyotingfkwlmocnsr.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZhZHB5b3Rpbmdma3dsbW9jbnNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNjUwNDAsImV4cCI6MjA5MTg0MTA0MH0.gDkpEJ3Hrf_k8696LbR8L_lGB0xyaHOjOVJ_GxcbrLc";
+  const BACKEND_URL       = "https://safesphere-backend-0ym4.onrender.com";
 </script>
 
-<div id="connBanner">⚠ Cannot connect to Supabase. Check your URL and ANON KEY in index.html</div>
+<!-- Connection error banners -->
+<div id="connBanner">⚠ Cannot connect to Supabase. Check SUPABASE_URL and ANON_KEY.</div>
+<div id="renderBanner">⚠ Render backend is waking up (free tier). Retrying resolve/delete in a moment…</div>
 
-<!-- Navbar -->
+<!-- ── Navbar ─────────────────────────────────────────────── -->
 <nav class="navbar">
-  <div class="brand">🛡 Phoenix <span>-SAKHI</span></div>
+  <div class="brand">🔥 Phoenix<span>-SAKHI</span></div>
   <div class="nav-right">
+    <div class="backend-pill" id="backendPill">
+      <span class="dot-b"></span>
+      <span id="backendStatus">Backend…</span>
+    </div>
     <span class="dot"></span> LIVE
     <span id="liveTime">--:--:--</span>
     <span>Admin Dashboard v1.0</span>
@@ -150,9 +170,9 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 
 <div class="layout">
 
-  <!-- Stats -->
+  <!-- Stats Row -->
   <div class="stats">
-    <div class="stat c-purple"><div class="stat-val" id="sTotal">—</div><div class="stat-lbl">Total Alerts</div></div>
+    <div class="stat c-orange"><div class="stat-val" id="sTotal">—</div><div class="stat-lbl">Total Alerts</div></div>
     <div class="stat c-red">   <div class="stat-val" id="sActive">—</div><div class="stat-lbl">Active</div></div>
     <div class="stat c-green"> <div class="stat-val" id="sResolved">—</div><div class="stat-lbl">Resolved</div></div>
     <div class="stat c-cyan">  <div class="stat-val" id="sUsers">—</div><div class="stat-lbl">Users</div></div>
@@ -163,6 +183,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
   <!-- Left Panel -->
   <div class="left-panel">
 
+    <!-- Alert List -->
     <div class="card">
       <div class="card-hdr">
         <span class="card-title">🚨 Active Alerts</span>
@@ -173,6 +194,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
       </div>
     </div>
 
+    <!-- Alert Detail -->
     <div class="card" id="detailCard" style="display:none">
       <div class="card-hdr">
         <span class="card-title">📋 Alert Detail</span>
@@ -186,6 +208,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
   <!-- Right Panel -->
   <div class="right-panel">
 
+    <!-- Map -->
     <div class="card">
       <div class="card-hdr">
         <span class="card-title">🗺 Live Location Map</span>
@@ -194,6 +217,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
       <div id="map"></div>
     </div>
 
+    <!-- CCTV -->
     <div class="card">
       <div class="card-hdr">
         <span class="card-title">📷 CCTV Feed (Webcam)</span>
@@ -207,20 +231,20 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
         </div>
       </div>
       <div class="cctv-btns">
-        <button class="cctv-btn" id="btnStart"    onclick="startCam()">▶ Start Camera</button>
-        <button class="cctv-btn" id="btnStop"     onclick="stopCam()">⏹ Stop</button>
-        <button class="cctv-btn"                  onclick="snap()">📸 Snapshot</button>
-        <button class="cctv-btn"                  onclick="goFullscreen()">⛶ Fullscreen</button>
+        <button class="cctv-btn" id="btnStart"  onclick="startCam()">▶ Start Camera</button>
+        <button class="cctv-btn" id="btnStop"   onclick="stopCam()">⏹ Stop</button>
+        <button class="cctv-btn"                onclick="snap()">📸 Snapshot</button>
+        <button class="cctv-btn"                onclick="goFullscreen()">⛶ Fullscreen</button>
       </div>
     </div>
 
   </div>
-</div>
+</div><!-- end layout -->
 
 <div id="toast"></div>
 <canvas id="snapCanvas" style="display:none"></canvas>
 
-<!-- Supabase JS SDK (CDN) -->
+<!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -235,11 +259,11 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ============================================================
 //  STATE
 // ============================================================
-let allAlerts    = [];
-let selectedId   = null;
-let mapObj       = null;
-let markers      = [];
-let camStream    = null;
+let allAlerts  = [];
+let selectedId = null;
+let mapObj     = null;
+let markers    = [];
+let camStream  = null;
 
 // ============================================================
 //  CLOCK
@@ -252,7 +276,32 @@ setInterval(() => {
 }, 1000);
 
 // ============================================================
-//  MAP (Leaflet + OpenStreetMap — zero API key needed)
+//  BACKEND HEALTH CHECK  (ping Render on load)
+// ============================================================
+async function checkBackend() {
+  const pill   = document.getElementById("backendPill");
+  const label  = document.getElementById("backendStatus");
+  try {
+    const res = await fetch(`${BACKEND_URL}/`, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      pill.className  = "backend-pill ok";
+      label.textContent = "Render ✓";
+    } else {
+      throw new Error("non-200");
+    }
+  } catch {
+    pill.className    = "backend-pill err";
+    label.textContent = "Render offline";
+    document.getElementById("renderBanner").style.display = "block";
+    // Auto-hide banner after 20s (Render wakes up within ~30s)
+    setTimeout(() => {
+      document.getElementById("renderBanner").style.display = "none";
+    }, 20000);
+  }
+}
+
+// ============================================================
+//  MAP
 // ============================================================
 function initMap() {
   mapObj = L.map("map").setView([22.5726, 88.3639], 12);
@@ -265,34 +314,34 @@ function initMap() {
 function refreshMarkers() {
   markers.forEach(m => mapObj.removeLayer(m));
   markers = [];
-  const active = allAlerts.filter(a => a.status === "active" && a.latitude && a.longitude);
-  active.forEach(a => {
-    const isFall = a.alert_type === "SOS_FALL";
-    const icon = L.divIcon({
-      className: "",
-      html: `<div style="
-        background:${isFall ? "#ffea00" : "#ff1744"};
-        border:2px solid #fff;border-radius:50%;
-        width:22px;height:22px;display:flex;align-items:center;
-        justify-content:center;font-size:11px;font-weight:800;color:#000;
-        box-shadow:0 0 10px ${isFall ? "rgba(255,234,0,.7)" : "rgba(255,23,68,.7)"};
-      ">!</div>`,
-      iconSize: [22, 22], iconAnchor: [11, 11]
+  allAlerts
+    .filter(a => a.status === "active" && a.latitude && a.longitude)
+    .forEach(a => {
+      const isFall = a.alert_type === "SOS_FALL";
+      const icon = L.divIcon({
+        className: "",
+        html: `<div style="
+          background:${isFall ? "#ffea00" : "#ff1744"};
+          border:2px solid #fff;border-radius:50%;
+          width:22px;height:22px;display:flex;align-items:center;
+          justify-content:center;font-size:11px;font-weight:800;color:#000;
+          box-shadow:0 0 10px ${isFall ? "rgba(255,234,0,.7)" : "rgba(255,23,68,.7)"};
+        ">!</div>`,
+        iconSize: [22,22], iconAnchor: [11,11]
+      });
+      const m = L.marker([a.latitude, a.longitude], { icon })
+        .addTo(mapObj)
+        .bindPopup(`
+          <b>${a.name || a.user_id}</b><br/>
+          📍 ${a.latitude.toFixed(5)}, ${a.longitude.toFixed(5)}<br/>
+          🚨 ${a.alert_type}<br/>
+          🕐 ${new Date(a.timestamp).toLocaleString()}
+        `);
+      m.on("click", () => selectAlert(a.id));
+      markers.push(m);
     });
-    const m = L.marker([a.latitude, a.longitude], { icon })
-      .addTo(mapObj)
-      .bindPopup(`
-        <b>${a.name || a.user_id}</b><br/>
-        📍 ${a.latitude.toFixed(5)}, ${a.longitude.toFixed(5)}<br/>
-        🚨 ${a.alert_type}<br/>
-        🕐 ${new Date(a.timestamp).toLocaleString()}
-      `);
-    m.on("click", () => selectAlert(a.id));
-    markers.push(m);
-  });
-  if (markers.length) {
+  if (markers.length)
     mapObj.fitBounds(L.featureGroup(markers).getBounds().pad(0.3));
-  }
 }
 
 function flyTo(lat, lng) {
@@ -300,7 +349,7 @@ function flyTo(lat, lng) {
 }
 
 // ============================================================
-//  DATA — SUPABASE QUERIES
+//  DATA — READ from Supabase directly
 // ============================================================
 async function loadAll() {
   try {
@@ -311,7 +360,6 @@ async function loadAll() {
 
     if (error) throw error;
 
-    // Flatten the nested users object
     allAlerts = (data || []).map(row => {
       const flat = { ...row };
       if (flat.users) { Object.assign(flat, flat.users); delete flat.users; }
@@ -325,15 +373,15 @@ async function loadAll() {
   } catch (err) {
     console.error(err);
     document.getElementById("alertList").innerHTML =
-      `<div class="empty">⚠ Supabase error: ${err.message}<br/><small>Check URL & ANON_KEY in index.html</small></div>`;
+      `<div class="empty">⚠ Supabase error: ${err.message}</div>`;
     document.getElementById("connBanner").style.display = "block";
   }
 }
 
 async function loadStats() {
-  const { data: alerts } = await db.from("alerts").select("status, alert_type");
-  const { count }        = await db.from("users").select("*", { count: "exact", head: true });
-  const rows = alerts || [];
+  const { data: alertData } = await db.from("alerts").select("status, alert_type");
+  const { count }           = await db.from("users").select("*", { count: "exact", head: true });
+  const rows = alertData || [];
   document.getElementById("sTotal").textContent    = rows.length;
   document.getElementById("sActive").textContent   = rows.filter(r => r.status     === "active").length;
   document.getElementById("sResolved").textContent = rows.filter(r => r.status     === "resolved").length;
@@ -371,7 +419,7 @@ function renderList() {
 // ============================================================
 function selectAlert(id) {
   selectedId = id;
-  renderList();  // refresh active highlight
+  renderList();
   const a = allAlerts.find(x => x.id === id);
   if (!a) return;
 
@@ -393,9 +441,12 @@ function selectAlert(id) {
         </span>
       </span>
     </div>
-    <button class="resolve-btn" id="resBtn" onclick="doResolve('${a.id}')" ${resolved ? "disabled" : ""}>
-      ${resolved ? "✅ Already Resolved" : "✔ Mark as Resolved"}
-    </button>
+    <div class="action-row">
+      <button class="resolve-btn" id="resBtn" onclick="doResolve('${a.id}')" ${resolved ? "disabled" : ""}>
+        ${resolved ? "✅ Resolved" : "✔ Mark Resolved"}
+      </button>
+      <button class="delete-btn" id="delBtn" onclick="doDelete('${a.id}')">🗑 Delete</button>
+    </div>
     <a class="osm-link"
        href="https://www.openstreetmap.org/?mlat=${a.latitude}&mlon=${a.longitude}#map=16/${a.latitude}/${a.longitude}"
        target="_blank">🗺 Open in OpenStreetMap ↗</a>
@@ -417,29 +468,84 @@ function closeDetail() {
   renderList();
 }
 
+// ============================================================
+//  WRITE via Render Backend
+// ============================================================
+
+// ── Resolve alert ── PUT /alerts/{id}/resolve ────────────
 async function doResolve(id) {
   const btn = document.getElementById("resBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
-  const { error } = await db.from("alerts")
-    .update({ status: "resolved", notes: "Resolved by admin dashboard" })
-    .eq("id", id);
-  if (error) {
-    toast("❌ " + error.message, "red");
-    if (btn) { btn.disabled = false; btn.textContent = "✔ Mark as Resolved"; }
-  } else {
-    toast("✅ Alert resolved");
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/alerts/${id}/resolve`, {
+      method:  "PUT",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ notes: "Resolved by Phoenix-SAKHI admin dashboard" }),
+      signal:  AbortSignal.timeout(15000)   // 15s timeout — Render may be waking up
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`HTTP ${res.status}: ${body}`);
+    }
+
+    toast("✅ Alert resolved via backend");
     await loadAll();
     closeDetail();
+
+  } catch (err) {
+    console.error("Resolve error:", err);
+    toast("❌ Resolve failed: " + err.message, "red");
+    if (btn) { btn.disabled = false; btn.textContent = "✔ Mark Resolved"; }
+    // Show render banner if it looks like a connection issue
+    if (err.message.includes("Failed to fetch") || err.message.includes("timeout")) {
+      document.getElementById("renderBanner").style.display = "block";
+      setTimeout(() => document.getElementById("renderBanner").style.display = "none", 20000);
+    }
+  }
+}
+
+// ── Delete alert ── DELETE /alerts/{id} ──────────────────
+async function doDelete(id) {
+  if (!confirm("Permanently delete this alert?")) return;
+
+  const btn = document.getElementById("delBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/alerts/${id}`, {
+      method: "DELETE",
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`HTTP ${res.status}: ${body}`);
+    }
+
+    toast("🗑 Alert deleted via backend");
+    await loadAll();
+    closeDetail();
+
+  } catch (err) {
+    console.error("Delete error:", err);
+    toast("❌ Delete failed: " + err.message, "red");
+    if (btn) { btn.disabled = false; btn.textContent = "🗑 Delete"; }
+    if (err.message.includes("Failed to fetch") || err.message.includes("timeout")) {
+      document.getElementById("renderBanner").style.display = "block";
+      setTimeout(() => document.getElementById("renderBanner").style.display = "none", 20000);
+    }
   }
 }
 
 // ============================================================
-//  REAL-TIME SUBSCRIPTION (Supabase Realtime)
+//  SUPABASE REALTIME SUBSCRIPTION
 // ============================================================
 function subscribeRealtime() {
-  db.channel("alerts-channel")
+  db.channel("phoenix-sakhi-alerts")
     .on("postgres_changes", { event: "*", schema: "public", table: "alerts" },
-      (payload) => {
+      payload => {
         if (payload.eventType === "INSERT") {
           toast("🚨 New SOS Alert received!", "red");
         }
@@ -458,8 +564,8 @@ async function startCam() {
     const v = document.getElementById("cctvVideo");
     v.srcObject = camStream;
     v.style.display = "block";
-    document.getElementById("cctvOff").style.display = "none";
-    document.getElementById("cctvHud").style.display = "flex";
+    document.getElementById("cctvOff").style.display  = "none";
+    document.getElementById("cctvHud").style.display  = "flex";
     document.getElementById("btnStart").style.display = "none";
     document.getElementById("btnStop").style.display  = "block";
     toast("📷 Camera started");
@@ -469,18 +575,17 @@ async function startCam() {
 }
 
 function stopCam() {
-  if (camStream) {
-    camStream.getTracks().forEach(t => t.stop());
-    camStream = null;
-    const v = document.getElementById("cctvVideo");
-    v.srcObject = null;
-    v.style.display = "none";
-    document.getElementById("cctvOff").style.display = "flex";
-    document.getElementById("cctvHud").style.display = "none";
-    document.getElementById("btnStart").style.display = "block";
-    document.getElementById("btnStop").style.display  = "none";
-    toast("⏹ Camera stopped");
-  }
+  if (!camStream) return;
+  camStream.getTracks().forEach(t => t.stop());
+  camStream = null;
+  const v = document.getElementById("cctvVideo");
+  v.srcObject = null;
+  v.style.display = "none";
+  document.getElementById("cctvOff").style.display  = "flex";
+  document.getElementById("cctvHud").style.display  = "none";
+  document.getElementById("btnStart").style.display = "block";
+  document.getElementById("btnStop").style.display  = "none";
+  toast("⏹ Camera stopped");
 }
 
 function snap() {
@@ -490,7 +595,7 @@ function snap() {
   c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext("2d").drawImage(v, 0, 0);
   const a = document.createElement("a");
-  a.download = `safesphere_snap_${Date.now()}.png`;
+  a.download = `phoenix_sakhi_snap_${Date.now()}.png`;
   a.href = c.toDataURL("image/png");
   a.click();
   toast("📸 Snapshot saved");
@@ -498,7 +603,8 @@ function snap() {
 
 function goFullscreen() {
   const box = document.getElementById("cctvBox");
-  if (!document.fullscreenElement) box.requestFullscreen().catch(e => toast("⚠ " + e.message, "yellow"));
+  if (!document.fullscreenElement)
+    box.requestFullscreen().catch(e => toast("⚠ " + e.message, "yellow"));
   else document.exitFullscreen();
 }
 
@@ -509,7 +615,9 @@ let tTimer;
 function toast(msg, color = "green") {
   const el = document.getElementById("toast");
   el.textContent = msg;
-  el.style.borderColor = color === "red" ? "var(--red)" : color === "yellow" ? "var(--yellow)" : "var(--green)";
+  el.style.borderColor = color === "red"    ? "var(--red)"
+                       : color === "yellow" ? "var(--yellow)"
+                       :                     "var(--green)";
   el.classList.add("show");
   clearTimeout(tTimer);
   tTimer = setTimeout(() => el.classList.remove("show"), 3500);
@@ -520,9 +628,10 @@ function toast(msg, color = "green") {
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
   initMap();
-  loadAll();
-  subscribeRealtime();          // live push updates, no polling needed!
-  setInterval(loadStats, 10000); // refresh stats every 10s as backup
+  checkBackend();          // ping Render, show status pill
+  loadAll();               // load alerts from Supabase
+  subscribeRealtime();     // live push via Supabase Realtime
+  setInterval(loadStats, 10000);
 });
 </script>
 </body>
