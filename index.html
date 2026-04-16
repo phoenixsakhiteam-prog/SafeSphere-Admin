@@ -2,20 +2,18 @@
 <html lang="en">
 <!--
   ============================================================
-   Phoenix-SAKHI — Admin Web Dashboard
+   Phoenix-SAKHI — Admin Web Dashboard (Final Version)
    Stack  : HTML · CSS · Vanilla JS · Leaflet.js · Supabase JS
    Reads  : Supabase JS SDK (realtime)
    Writes : Render Backend (resolve / delete)
+   Extra  : Direct Wearable BT + Laptop GPS fallback
   ============================================================
 -->
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Phoenix-SAKHI — Admin Dashboard</title>
-
-<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -41,18 +39,18 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .navbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:1000;box-shadow:var(--shadow)}
 .brand{font-size:20px;font-weight:800;color:var(--orange);display:flex;align-items:center;gap:8px}
 .brand span{color:var(--cyan)}
-.nav-right{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--muted)}
+.nav-right{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
 #liveTime{color:var(--text);font-weight:700}
 .dot{width:8px;height:8px;background:var(--green);border-radius:50%;display:inline-block;animation:blink 1.4s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.pill{display:flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+.pill .pdot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.pill.ok{border-color:rgba(0,230,118,.3);color:var(--green)}.pill.ok .pdot{background:var(--green)}
+.pill.err{border-color:rgba(255,23,68,.3);color:var(--red)}.pill.err .pdot{background:var(--red)}
 
-/* ── Backend status pill ────────────────────────────────── */
-.backend-pill{display:flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
-.backend-pill .dot-b{width:7px;height:7px;border-radius:50%;background:var(--muted)}
-.backend-pill.ok  .dot-b{background:var(--green)}
-.backend-pill.err .dot-b{background:var(--red)}
-.backend-pill.ok {border-color:rgba(0,230,118,.3);color:var(--green)}
-.backend-pill.err{border-color:rgba(255,23,68,.3); color:var(--red)}
+/* ── Banners ─────────────────────────────────────────────── */
+#connBanner{display:none;background:rgba(255,23,68,.15);border:1px solid var(--red);color:var(--red);padding:10px 20px;text-align:center;font-size:13px;font-weight:600}
+#renderBanner{display:none;background:rgba(255,107,0,.12);border:1px solid rgba(255,107,0,.4);color:var(--orange);padding:8px 20px;text-align:center;font-size:12px}
 
 /* ── Layout ─────────────────────────────────────────────── */
 .layout{display:grid;grid-template-columns:340px 1fr;gap:20px;padding:20px;max-width:1600px;margin:0 auto}
@@ -75,12 +73,10 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .card-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--orange)}
 .btn-sm{background:none;border:1px solid var(--border);border-radius:6px;color:var(--cyan);padding:4px 10px;font-size:12px;cursor:pointer;transition:background .2s}
 .btn-sm:hover{background:var(--panel)}
-.btn-sm.danger{color:var(--red);border-color:rgba(255,23,68,.3)}
-.btn-sm.danger:hover{background:rgba(255,23,68,.1)}
 
 /* ── Alert List ─────────────────────────────────────────── */
 .left-panel{display:flex;flex-direction:column;gap:16px}
-.alert-scroll{max-height:440px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.alert-scroll{max-height:400px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 .a-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;border-left:3px solid transparent}
 .a-item:hover{background:var(--panel)}
 .a-item.sel{background:rgba(255,107,0,.08);border-left-color:var(--orange)}
@@ -112,27 +108,35 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 
 /* ── Right Panel ────────────────────────────────────────── */
 .right-panel{display:flex;flex-direction:column;gap:16px}
-#map{height:420px;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+#map{height:380px;border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
 
 /* ── CCTV ───────────────────────────────────────────────── */
-.cctv-wrap{position:relative;background:#000;aspect-ratio:16/9;overflow:hidden}
-#cctvVideo{width:100%;height:100%;object-fit:cover;display:block}
+.cctv-wrap{position:relative;background:#000;overflow:hidden}
+.cctv-wrap video{width:100%;display:block;min-height:180px;object-fit:cover}
 .cctv-hud{position:absolute;top:0;left:0;right:0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);pointer-events:none}
 .rec-label{font-size:12px;font-weight:800;color:var(--red);letter-spacing:.1em;display:flex;align-items:center;gap:6px}
 .cctv-ts{font-size:12px;color:rgba(255,255,255,.7)}
-.cctv-off{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:14px;background:#000}
+.cctv-off{display:flex;align-items:center;justify-content:center;min-height:140px;color:var(--muted);font-size:14px;background:#000}
 .cctv-btns{display:flex;gap:8px;padding:10px;background:var(--card);border-top:1px solid var(--border)}
 .cctv-btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:12px;cursor:pointer;transition:background .2s}
 .cctv-btn:hover{background:var(--border)}
 #btnStop{display:none}
 
+/* ── Direct Wearable ────────────────────────────────────── */
+.dw-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.dw-row:last-child{border-bottom:none}
+.dw-key{color:var(--muted);font-size:12px}
+.dw-val{color:var(--text);font-weight:600;font-size:12px;text-align:right;max-width:200px;word-break:break-all}
+.dw-btns{display:flex;gap:8px;margin-top:12px}
+.dw-btn{flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);font-size:12px;cursor:pointer;transition:background .2s}
+.dw-btn:hover{background:var(--border)}
+.dw-sos{width:100%;margin-top:10px;padding:11px;background:var(--red);border:none;border-radius:8px;color:#fff;font-weight:800;font-size:14px;cursor:pointer}
+.dw-sos:hover{opacity:.88}
+.dw-log{margin-top:10px;background:#0a0a18;border-radius:8px;padding:10px;font-size:11px;color:var(--muted);font-family:monospace;min-height:52px;max-height:110px;overflow-y:auto;line-height:1.5}
+
 /* ── Toast ──────────────────────────────────────────────── */
 #toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:12px 20px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
 #toast.show{opacity:1}
-
-/* ── Banners ────────────────────────────────────────────── */
-#connBanner{display:none;background:rgba(255,23,68,.15);border:1px solid var(--red);color:var(--red);padding:10px 20px;text-align:center;font-size:13px;font-weight:600}
-#renderBanner{display:none;background:rgba(255,107,0,.12);border:1px solid rgba(255,107,0,.4);color:var(--orange);padding:8px 20px;text-align:center;font-size:12px}
 
 /* ── Responsive ─────────────────────────────────────────── */
 @media(max-width:900px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(3,1fr)}}
@@ -141,30 +145,28 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 </head>
 <body>
 
+<!-- ══════════════════════════════════════════════════════════
+     CONFIGURATION — already filled in from your project
+     ══════════════════════════════════════════════════════════ -->
 <script>
-  /* ══════════════════════════════════════════════════════════
-     ⚙  CONFIGURATION — already filled in
-     ══════════════════════════════════════════════════════════ */
   const SUPABASE_URL      = "https://vadpyotingfkwlmocnsr.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZhZHB5b3Rpbmdma3dsbW9jbnNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNjUwNDAsImV4cCI6MjA5MTg0MTA0MH0.gDkpEJ3Hrf_k8696LbR8L_lGB0xyaHOjOVJ_GxcbrLc";
   const BACKEND_URL       = "https://safesphere-backend-0ym4.onrender.com";
+  const DIRECT_USER_ID    = "user001";
 </script>
 
-<!-- Connection error banners -->
 <div id="connBanner">⚠ Cannot connect to Supabase. Check SUPABASE_URL and ANON_KEY.</div>
-<div id="renderBanner">⚠ Render backend is waking up (free tier). Retrying resolve/delete in a moment…</div>
+<div id="renderBanner">⚠ Render backend is waking up (free tier). Resolve/delete will retry shortly…</div>
 
-<!-- ── Navbar ─────────────────────────────────────────────── -->
+<!-- Navbar -->
 <nav class="navbar">
   <div class="brand">🔥 Phoenix<span>-SAKHI</span></div>
   <div class="nav-right">
-    <div class="backend-pill" id="backendPill">
-      <span class="dot-b"></span>
-      <span id="backendStatus">Backend…</span>
-    </div>
+    <div class="pill" id="backendPill"><span class="pdot"></span><span id="backendStatus">Backend…</span></div>
+    <div class="pill" id="wearablePill"><span class="pdot"></span><span id="wearablePillText">Wearable offline</span></div>
     <span class="dot"></span> LIVE
     <span id="liveTime">--:--:--</span>
-    <span>Admin Dashboard v1.0</span>
+    <span>Admin v2.0</span>
   </div>
 </nav>
 
@@ -238,8 +240,28 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
       </div>
     </div>
 
+    <!-- Direct Wearable Connection -->
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📡 Direct Wearable Link</span>
+        <span style="font-size:11px;color:var(--muted)">Bypasses Android app</span>
+      </div>
+      <div style="padding:14px">
+        <div class="dw-row"><span class="dw-key">Laptop GPS</span><span class="dw-val" id="laptopGPS">Not fetched yet</span></div>
+        <div class="dw-row"><span class="dw-key">Wearable BT</span><span class="dw-val" id="wearableStatus">Not connected</span></div>
+        <div class="dw-row"><span class="dw-key">Last BT signal</span><span class="dw-val" id="lastDirectSignal">—</span></div>
+        <div class="dw-row"><span class="dw-key">Active user</span><span class="dw-val" id="directUserId">—</span></div>
+        <div class="dw-btns">
+          <button class="dw-btn" onclick="getLaptopGPS()">📍 Get GPS</button>
+          <button class="dw-btn" id="btnWearableConnect" onclick="connectWearableBT()">🔗 Connect BT</button>
+        </div>
+        <button class="dw-sos" onclick="sendDirectSOS('SOS_BUTTON')">🆘 Manual SOS from Dashboard</button>
+        <div class="dw-log" id="directLog">Waiting for wearable connection…</div>
+      </div>
+    </div>
+
   </div>
-</div><!-- end layout -->
+</div>
 
 <div id="toast"></div>
 <canvas id="snapCanvas" style="display:none"></canvas>
@@ -276,27 +298,22 @@ setInterval(() => {
 }, 1000);
 
 // ============================================================
-//  BACKEND HEALTH CHECK  (ping Render on load)
+//  BACKEND HEALTH CHECK
 // ============================================================
 async function checkBackend() {
-  const pill   = document.getElementById("backendPill");
-  const label  = document.getElementById("backendStatus");
+  const pill  = document.getElementById("backendPill");
+  const label = document.getElementById("backendStatus");
   try {
     const res = await fetch(`${BACKEND_URL}/`, { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
-      pill.className  = "backend-pill ok";
+      pill.className    = "pill ok";
       label.textContent = "Render ✓";
-    } else {
-      throw new Error("non-200");
-    }
+    } else throw new Error();
   } catch {
-    pill.className    = "backend-pill err";
+    pill.className    = "pill err";
     label.textContent = "Render offline";
     document.getElementById("renderBanner").style.display = "block";
-    // Auto-hide banner after 20s (Render wakes up within ~30s)
-    setTimeout(() => {
-      document.getElementById("renderBanner").style.display = "none";
-    }, 20000);
+    setTimeout(() => document.getElementById("renderBanner").style.display = "none", 20000);
   }
 }
 
@@ -306,8 +323,7 @@ async function checkBackend() {
 function initMap() {
   mapObj = L.map("map").setView([22.5726, 88.3639], 12);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap contributors",
-    maxZoom: 19
+    attribution: "© OpenStreetMap contributors", maxZoom: 19
   }).addTo(mapObj);
 }
 
@@ -320,23 +336,12 @@ function refreshMarkers() {
       const isFall = a.alert_type === "SOS_FALL";
       const icon = L.divIcon({
         className: "",
-        html: `<div style="
-          background:${isFall ? "#ffea00" : "#ff1744"};
-          border:2px solid #fff;border-radius:50%;
-          width:22px;height:22px;display:flex;align-items:center;
-          justify-content:center;font-size:11px;font-weight:800;color:#000;
-          box-shadow:0 0 10px ${isFall ? "rgba(255,234,0,.7)" : "rgba(255,23,68,.7)"};
-        ">!</div>`,
-        iconSize: [22,22], iconAnchor: [11,11]
+        html: `<div style="background:${isFall?"#ffea00":"#ff1744"};border:2px solid #fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#000;box-shadow:0 0 10px ${isFall?"rgba(255,234,0,.7)":"rgba(255,23,68,.7)"}">!</div>`,
+        iconSize:[22,22],iconAnchor:[11,11]
       });
       const m = L.marker([a.latitude, a.longitude], { icon })
         .addTo(mapObj)
-        .bindPopup(`
-          <b>${a.name || a.user_id}</b><br/>
-          📍 ${a.latitude.toFixed(5)}, ${a.longitude.toFixed(5)}<br/>
-          🚨 ${a.alert_type}<br/>
-          🕐 ${new Date(a.timestamp).toLocaleString()}
-        `);
+        .bindPopup(`<b>${a.name||a.user_id}</b><br/>📍 ${a.latitude.toFixed(5)}, ${a.longitude.toFixed(5)}<br/>🚨 ${a.alert_type}<br/>🕐 ${new Date(a.timestamp).toLocaleString()}`);
       m.on("click", () => selectAlert(a.id));
       markers.push(m);
     });
@@ -344,9 +349,7 @@ function refreshMarkers() {
     mapObj.fitBounds(L.featureGroup(markers).getBounds().pad(0.3));
 }
 
-function flyTo(lat, lng) {
-  mapObj.flyTo([lat, lng], 16, { duration: 1 });
-}
+function flyTo(lat, lng) { mapObj.flyTo([lat, lng], 16, { duration: 1 }); }
 
 // ============================================================
 //  DATA — READ from Supabase directly
@@ -357,30 +360,26 @@ async function loadAll() {
       .from("alerts")
       .select(`*, users(name, phone, emergency_contact, emergency_phone, address)`)
       .order("timestamp", { ascending: false });
-
     if (error) throw error;
-
     allAlerts = (data || []).map(row => {
       const flat = { ...row };
       if (flat.users) { Object.assign(flat, flat.users); delete flat.users; }
       return flat;
     });
-
     renderList();
     refreshMarkers();
     loadStats();
     document.getElementById("connBanner").style.display = "none";
   } catch (err) {
     console.error(err);
-    document.getElementById("alertList").innerHTML =
-      `<div class="empty">⚠ Supabase error: ${err.message}</div>`;
+    document.getElementById("alertList").innerHTML = `<div class="empty">⚠ Supabase error: ${err.message}</div>`;
     document.getElementById("connBanner").style.display = "block";
   }
 }
 
 async function loadStats() {
   const { data: alertData } = await db.from("alerts").select("status, alert_type");
-  const { count }           = await db.from("users").select("*", { count: "exact", head: true });
+  const { count } = await db.from("users").select("*", { count: "exact", head: true });
   const rows = alertData || [];
   document.getElementById("sTotal").textContent    = rows.length;
   document.getElementById("sActive").textContent   = rows.filter(r => r.status     === "active").length;
@@ -396,22 +395,18 @@ async function loadStats() {
 function renderList() {
   const el     = document.getElementById("alertList");
   const active = allAlerts.filter(a => a.status === "active");
-  if (!active.length) {
-    el.innerHTML = `<div class="empty">✅ No active alerts right now</div>`;
-    return;
-  }
+  if (!active.length) { el.innerHTML = `<div class="empty">✅ No active alerts right now</div>`; return; }
   el.innerHTML = active.map(a => `
-    <div class="a-item ${a.id === selectedId ? "sel" : ""}" onclick="selectAlert('${a.id}')">
+    <div class="a-item ${a.id===selectedId?"sel":""}" onclick="selectAlert('${a.id}')">
       <div class="a-top">
-        <span class="a-name">👤 ${a.name || a.user_id}</span>
-        <span class="badge ${a.alert_type === "SOS_FALL" ? "b-fall" : "b-btn"}">
-          ${a.alert_type === "SOS_FALL" ? "🤸 FALL" : "🆘 BUTTON"}
+        <span class="a-name">👤 ${a.name||a.user_id}</span>
+        <span class="badge ${a.alert_type==="SOS_FALL"?"b-fall":"b-btn"}">
+          ${a.alert_type==="SOS_FALL"?"🤸 FALL":"🆘 BUTTON"}
         </span>
       </div>
       <div class="a-time">🕐 ${new Date(a.timestamp).toLocaleString()}</div>
-      <div class="a-loc">📍 ${a.latitude?.toFixed(4) ?? "?"}, ${a.longitude?.toFixed(4) ?? "?"}</div>
-    </div>
-  `).join("");
+      <div class="a-loc">📍 ${a.latitude?.toFixed(4)??"?"}, ${a.longitude?.toFixed(4)??"?"}</div>
+    </div>`).join("");
 }
 
 // ============================================================
@@ -422,42 +417,34 @@ function selectAlert(id) {
   renderList();
   const a = allAlerts.find(x => x.id === id);
   if (!a) return;
-
   const resolved = a.status === "resolved";
   document.getElementById("detailCard").style.display = "block";
   document.getElementById("detailBody").innerHTML = `
-    <div class="d-row"><span class="d-key">Name</span>              <span class="d-val">${a.name || "—"}</span></div>
-    <div class="d-row"><span class="d-key">Phone</span>             <span class="d-val">${a.phone || "—"}</span></div>
-    <div class="d-row"><span class="d-key">Emergency Contact</span> <span class="d-val">${a.emergency_contact || "—"}</span></div>
-    <div class="d-row"><span class="d-key">Emergency Phone</span>   <span class="d-val">${a.emergency_phone || "—"}</span></div>
-    <div class="d-row"><span class="d-key">Address</span>           <span class="d-val">${a.address || "—"}</span></div>
+    <div class="d-row"><span class="d-key">Name</span>              <span class="d-val">${a.name||"—"}</span></div>
+    <div class="d-row"><span class="d-key">Phone</span>             <span class="d-val">${a.phone||"—"}</span></div>
+    <div class="d-row"><span class="d-key">Emergency Contact</span> <span class="d-val">${a.emergency_contact||"—"}</span></div>
+    <div class="d-row"><span class="d-key">Emergency Phone</span>   <span class="d-val">${a.emergency_phone||"—"}</span></div>
+    <div class="d-row"><span class="d-key">Address</span>           <span class="d-val">${a.address||"—"}</span></div>
     <div class="d-row"><span class="d-key">Alert Type</span>        <span class="d-val">${a.alert_type}</span></div>
     <div class="d-row"><span class="d-key">Coordinates</span>       <span class="d-val">${a.latitude?.toFixed(5)}, ${a.longitude?.toFixed(5)}</span></div>
     <div class="d-row"><span class="d-key">Time</span>              <span class="d-val">${new Date(a.timestamp).toLocaleString()}</span></div>
     <div class="d-row"><span class="d-key">Status</span>
-      <span class="d-val">
-        <span class="badge ${resolved ? "b-res" : "b-act"}">
-          ${resolved ? "✅ Resolved" : "🔴 Active"}
-        </span>
-      </span>
+      <span class="d-val"><span class="badge ${resolved?"b-res":"b-act"}">${resolved?"✅ Resolved":"🔴 Active"}</span></span>
     </div>
     <div class="action-row">
-      <button class="resolve-btn" id="resBtn" onclick="doResolve('${a.id}')" ${resolved ? "disabled" : ""}>
-        ${resolved ? "✅ Resolved" : "✔ Mark Resolved"}
+      <button class="resolve-btn" id="resBtn" onclick="doResolve('${a.id}')" ${resolved?"disabled":""}>
+        ${resolved?"✅ Resolved":"✔ Mark Resolved"}
       </button>
       <button class="delete-btn" id="delBtn" onclick="doDelete('${a.id}')">🗑 Delete</button>
     </div>
     <a class="osm-link"
        href="https://www.openstreetmap.org/?mlat=${a.latitude}&mlon=${a.longitude}#map=16/${a.latitude}/${a.longitude}"
-       target="_blank">🗺 Open in OpenStreetMap ↗</a>
-  `;
-
+       target="_blank">🗺 Open in OpenStreetMap ↗</a>`;
   if (a.latitude && a.longitude) {
     flyTo(a.latitude, a.longitude);
     const m = markers.find(mk =>
       Math.abs(mk.getLatLng().lat - a.latitude) < 0.00001 &&
-      Math.abs(mk.getLatLng().lng - a.longitude) < 0.00001
-    );
+      Math.abs(mk.getLatLng().lng - a.longitude) < 0.00001);
     if (m) m.openPopup();
   }
 }
@@ -471,34 +458,23 @@ function closeDetail() {
 // ============================================================
 //  WRITE via Render Backend
 // ============================================================
-
-// ── Resolve alert ── PUT /alerts/{id}/resolve ────────────
 async function doResolve(id) {
   const btn = document.getElementById("resBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
-
   try {
     const res = await fetch(`${BACKEND_URL}/alerts/${id}/resolve`, {
-      method:  "PUT",
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ notes: "Resolved by Phoenix-SAKHI admin dashboard" }),
-      signal:  AbortSignal.timeout(15000)   // 15s timeout — Render may be waking up
+      body: JSON.stringify({ notes: "Resolved by Phoenix-SAKHI admin dashboard" }),
+      signal: AbortSignal.timeout(15000)
     });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`HTTP ${res.status}: ${body}`);
-    }
-
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     toast("✅ Alert resolved via backend");
     await loadAll();
     closeDetail();
-
   } catch (err) {
-    console.error("Resolve error:", err);
     toast("❌ Resolve failed: " + err.message, "red");
     if (btn) { btn.disabled = false; btn.textContent = "✔ Mark Resolved"; }
-    // Show render banner if it looks like a connection issue
     if (err.message.includes("Failed to fetch") || err.message.includes("timeout")) {
       document.getElementById("renderBanner").style.display = "block";
       setTimeout(() => document.getElementById("renderBanner").style.display = "none", 20000);
@@ -506,30 +482,19 @@ async function doResolve(id) {
   }
 }
 
-// ── Delete alert ── DELETE /alerts/{id} ──────────────────
 async function doDelete(id) {
   if (!confirm("Permanently delete this alert?")) return;
-
   const btn = document.getElementById("delBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
-
   try {
     const res = await fetch(`${BACKEND_URL}/alerts/${id}`, {
-      method: "DELETE",
-      signal: AbortSignal.timeout(15000)
+      method: "DELETE", signal: AbortSignal.timeout(15000)
     });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`HTTP ${res.status}: ${body}`);
-    }
-
-    toast("🗑 Alert deleted via backend");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    toast("🗑 Alert deleted");
     await loadAll();
     closeDetail();
-
   } catch (err) {
-    console.error("Delete error:", err);
     toast("❌ Delete failed: " + err.message, "red");
     if (btn) { btn.disabled = false; btn.textContent = "🗑 Delete"; }
     if (err.message.includes("Failed to fetch") || err.message.includes("timeout")) {
@@ -540,18 +505,15 @@ async function doDelete(id) {
 }
 
 // ============================================================
-//  SUPABASE REALTIME SUBSCRIPTION
+//  SUPABASE REALTIME
 // ============================================================
 function subscribeRealtime() {
   db.channel("phoenix-sakhi-alerts")
     .on("postgres_changes", { event: "*", schema: "public", table: "alerts" },
       payload => {
-        if (payload.eventType === "INSERT") {
-          toast("🚨 New SOS Alert received!", "red");
-        }
+        if (payload.eventType === "INSERT") toast("🚨 New SOS Alert received!", "red");
         loadAll();
-      }
-    )
+      })
     .subscribe();
 }
 
@@ -562,16 +524,13 @@ async function startCam() {
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     const v = document.getElementById("cctvVideo");
-    v.srcObject = camStream;
-    v.style.display = "block";
+    v.srcObject = camStream; v.style.display = "block";
     document.getElementById("cctvOff").style.display  = "none";
     document.getElementById("cctvHud").style.display  = "flex";
     document.getElementById("btnStart").style.display = "none";
     document.getElementById("btnStop").style.display  = "block";
     toast("📷 Camera started");
-  } catch (e) {
-    toast("❌ Camera: " + e.message, "red");
-  }
+  } catch (e) { toast("❌ Camera: " + e.message, "red"); }
 }
 
 function stopCam() {
@@ -579,8 +538,7 @@ function stopCam() {
   camStream.getTracks().forEach(t => t.stop());
   camStream = null;
   const v = document.getElementById("cctvVideo");
-  v.srcObject = null;
-  v.style.display = "none";
+  v.srcObject = null; v.style.display = "none";
   document.getElementById("cctvOff").style.display  = "flex";
   document.getElementById("cctvHud").style.display  = "none";
   document.getElementById("btnStart").style.display = "block";
@@ -603,9 +561,140 @@ function snap() {
 
 function goFullscreen() {
   const box = document.getElementById("cctvBox");
-  if (!document.fullscreenElement)
-    box.requestFullscreen().catch(e => toast("⚠ " + e.message, "yellow"));
+  if (!document.fullscreenElement) box.requestFullscreen().catch(e => toast("⚠ " + e.message, "yellow"));
   else document.exitFullscreen();
+}
+
+// ============================================================
+//  DIRECT WEARABLE → ADMIN DASHBOARD (Web Bluetooth + Laptop GPS)
+// ============================================================
+let laptopLat = null;
+let laptopLng = null;
+let wearableBTDevice = null;
+let wearableBTChar   = null;
+
+function getLaptopGPS() {
+  if (!navigator.geolocation) { directLog("❌ Geolocation not supported"); return; }
+  directLog("📍 Requesting laptop GPS…");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      laptopLat = pos.coords.latitude;
+      laptopLng = pos.coords.longitude;
+      const acc = Math.round(pos.coords.accuracy);
+      document.getElementById("laptopGPS").textContent =
+        `${laptopLat.toFixed(5)}, ${laptopLng.toFixed(5)} (±${acc}m)`;
+      directLog(`✅ GPS locked: ${laptopLat.toFixed(4)}, ${laptopLng.toFixed(4)}`);
+    },
+    err => {
+      laptopLat = 22.5726; laptopLng = 88.3639;
+      document.getElementById("laptopGPS").textContent = "22.57260, 88.36390 (Kolkata fallback)";
+      directLog("⚠ GPS error — using Kolkata fallback: " + err.message);
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+async function connectWearableBT() {
+  if (!navigator.bluetooth) {
+    directLog("❌ Web Bluetooth not supported — use Chrome on desktop/Android");
+    document.getElementById("wearableStatus").textContent = "Web BT not available";
+    updateWearablePill(false);
+    return;
+  }
+  try {
+    directLog("🔍 Scanning for HC-05…");
+    document.getElementById("wearableStatus").textContent = "Scanning…";
+    wearableBTDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "HC-05" }],
+      optionalServices: ["0000ffe0-0000-1000-8000-00805f9b34fb"]
+    });
+    directLog("🔗 Found: " + wearableBTDevice.name);
+    const server  = await wearableBTDevice.gatt.connect();
+    const service = await server.getPrimaryService("0000ffe0-0000-1000-8000-00805f9b34fb");
+    wearableBTChar = await service.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
+    await wearableBTChar.startNotifications();
+    wearableBTChar.addEventListener("characteristicvaluechanged", onWearableSignal);
+    document.getElementById("wearableStatus").textContent = "✅ Connected to HC-05";
+    document.getElementById("directUserId").textContent   = DIRECT_USER_ID;
+    document.getElementById("btnWearableConnect").textContent = "Reconnect";
+    updateWearablePill(true);
+    directLog("✅ Wearable live! Listening for SOS signals…");
+    wearableBTDevice.addEventListener("gattserverdisconnected", () => {
+      directLog("⚠ Wearable disconnected");
+      document.getElementById("wearableStatus").textContent = "Disconnected";
+      updateWearablePill(false);
+    });
+  } catch (err) {
+    directLog("❌ BT error: " + err.message);
+    document.getElementById("wearableStatus").textContent = "Failed: " + err.message;
+    updateWearablePill(false);
+  }
+}
+
+function updateWearablePill(online) {
+  const pill  = document.getElementById("wearablePill");
+  const label = document.getElementById("wearablePillText");
+  pill.className    = "pill " + (online ? "ok" : "err");
+  label.textContent = online ? "Wearable live" : "Wearable offline";
+}
+
+function onWearableSignal(event) {
+  const signal = new TextDecoder().decode(event.target.value).trim();
+  directLog("📡 Signal: " + signal);
+  document.getElementById("lastDirectSignal").textContent =
+    signal + " @ " + new Date().toLocaleTimeString();
+  if (signal.includes("SOS_BUTTON")) {
+    toast("🚨 SOS_BUTTON from wearable!", "red");
+    sendDirectSOS("SOS_BUTTON");
+  } else if (signal.includes("SOS_FALL")) {
+    toast("🚨 SOS_FALL from wearable!", "red");
+    sendDirectSOS("SOS_FALL");
+  }
+}
+
+async function sendDirectSOS(alertType) {
+  if (!laptopLat || !laptopLng) {
+    directLog("📍 Fetching GPS before sending…");
+    await new Promise(resolve => {
+      navigator.geolocation.getCurrentPosition(
+        pos => { laptopLat=pos.coords.latitude; laptopLng=pos.coords.longitude; resolve(); },
+        ()  => { laptopLat=22.5726; laptopLng=88.3639; resolve(); },
+        { timeout: 6000 }
+      );
+    });
+  }
+  directLog(`🚀 Sending ${alertType} (${laptopLat.toFixed(4)}, ${laptopLng.toFixed(4)})…`);
+  try {
+    const res = await fetch(`${BACKEND_URL}/alert`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        user_id:    DIRECT_USER_ID,
+        alert_type: alertType,
+        latitude:   laptopLat,
+        longitude:  laptopLng
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      directLog(`✅ Alert sent! ID: ${data.alert_id}`);
+      toast("✅ Direct SOS sent via dashboard", "green");
+      await loadAll();
+    } else {
+      directLog("❌ Backend error: HTTP " + res.status);
+    }
+  } catch (err) {
+    directLog("❌ Network error: " + err.message);
+    toast("❌ Direct SOS failed", "red");
+  }
+}
+
+function directLog(msg) {
+  const el = document.getElementById("directLog");
+  const ts = new Date().toLocaleTimeString();
+  el.innerHTML += `<div>[${ts}] ${msg}</div>`;
+  el.scrollTop  = el.scrollHeight;
 }
 
 // ============================================================
@@ -615,9 +704,7 @@ let tTimer;
 function toast(msg, color = "green") {
   const el = document.getElementById("toast");
   el.textContent = msg;
-  el.style.borderColor = color === "red"    ? "var(--red)"
-                       : color === "yellow" ? "var(--yellow)"
-                       :                     "var(--green)";
+  el.style.borderColor = color==="red"?"var(--red)":color==="yellow"?"var(--yellow)":"var(--green)";
   el.classList.add("show");
   clearTimeout(tTimer);
   tTimer = setTimeout(() => el.classList.remove("show"), 3500);
@@ -628,10 +715,12 @@ function toast(msg, color = "green") {
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
   initMap();
-  checkBackend();          // ping Render, show status pill
-  loadAll();               // load alerts from Supabase
-  subscribeRealtime();     // live push via Supabase Realtime
+  checkBackend();
+  loadAll();
+  subscribeRealtime();
   setInterval(loadStats, 10000);
+  getLaptopGPS();
+  document.getElementById("directUserId").textContent = DIRECT_USER_ID;
 });
 </script>
 </body>
